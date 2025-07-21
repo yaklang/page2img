@@ -52,7 +52,7 @@ jobs:
 
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'
-      run: choco install msys2 --params "/NoUpdate" && C:\msys64\usr\bin\bash -lc "pacman -Syu --noconfirm && pacman -S --noconfirm mingw-w64-x86_64-mupdf mingw-w64-x86_64-pkg-config"
+      run: choco install msys2 --params "/NoUpdate" && C:\msys64\usr\bin\bash -lc "pacman -Syu --noconfirm && pacman -S --noconfirm mingw-w64-x86_64-mupdf mingw-w64-x86_64-pkg-config mingw-w64-x86_64-coreutils"
 
     - name: Set environment for Windows
       if: runner.os == 'Windows'
@@ -69,7 +69,7 @@ jobs:
         if [[ "${{ runner.os }}" == "macOS" ]]; then
           export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig"
         fi
-        go build -v -tags "static" -o pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi) main.go
+        go build -v -tags "extlib static pkgconfig" -o pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi) main.go
 
     - name: Verify Static Linking
       shell: bash
@@ -79,9 +79,12 @@ jobs:
         echo "Verifying linking for $BINARY_NAME"
         if [[ "${{ runner.os }}" == "Linux" ]]; then
           echo "--- ldd output ---"
-          ldd $BINARY_NAME
+          # On a fully static binary, ldd returns a non-zero exit code and prints to stderr.
+          # We pipe stderr to stdout and check the output.
+          LDD_OUTPUT=$(ldd $BINARY_NAME 2>&1 || true)
+          echo "$LDD_OUTPUT"
           echo "---"
-          if ldd $BINARY_NAME | grep -q 'mupdf'; then
+          if echo "$LDD_OUTPUT" | grep -q 'mupdf'; then
             echo "Error: Binary is dynamically linked to mupdf on Linux"
             exit 1
           fi
@@ -107,7 +110,14 @@ jobs:
     - name: Generate SHA256 checksum
       shell: bash
       run: |
-        sha256sum pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi) > pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
+        set -e
+        BINARY_NAME="pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi)"
+        if [[ "${{ runner.os }}" == "Linux" ]] || [[ "${{ runner.os }}" == "Windows" ]]; then
+          sha256sum $BINARY_NAME > $BINARY_NAME.sha256
+        elif [[ "${{ runner.os }}" == "macOS" ]]; then
+          shasum -a 256 $BINARY_NAME > $BINARY_NAME.sha256
+        fi
+        cat $BINARY_NAME.sha256
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
