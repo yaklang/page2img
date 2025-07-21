@@ -9,14 +9,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/yaklang/pdf2img/common/log"
+	"github.com/yaklang/page2img/common/log"
 
 	"github.com/gen2brain/go-fitz"
 )
 
 func main() {
 	var inputFile, outputPattern string
-	flag.StringVar(&inputFile, "i", "", "input PDF file")
+	flag.StringVar(&inputFile, "i", "", "input document file")
 	flag.StringVar(&outputPattern, "o", "", "output image pattern (e.g., image-%d.jpg)")
 	flag.Parse()
 
@@ -25,10 +25,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Info("Opening PDF file:", inputFile)
+	log.Info("Opening document file:", inputFile)
 	doc, err := fitz.New(inputFile)
 	if err != nil {
-		log.Fatal("Failed to open PDF:", err)
+		log.Fatal("Failed to open document:", err)
 	}
 	defer doc.Close()
 
@@ -38,7 +38,7 @@ func main() {
 	}
 	outputPrefix := strings.TrimSuffix(outputPattern, filepath.Ext(outputPattern))
 
-	log.Info(fmt.Sprintf("PDF has %d pages.", doc.NumPage()))
+	log.Info(fmt.Sprintf("Document has %d pages.", doc.NumPage()))
 
 	for n := 0; n < doc.NumPage(); n++ {
 		pageNum := n + 1

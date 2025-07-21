@@ -64,13 +64,13 @@ jobs:
         CC: ${{ matrix.goos == 'linux' && matrix.goarch == 'arm64' && 'aarch64-linux-gnu-gcc' || '' }}
       shell: bash
       run: |
-        go build -v -tags "static" -o pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi) main.go
+        go build -v -tags "static" -o page2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi) page2img.go
 
     - name: Verify Static Linking
       shell: bash
       run: |
         set -e
-        BINARY_NAME="pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi)"
+        BINARY_NAME="page2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi)"
         echo "Verifying linking for $BINARY_NAME"
         
         if [[ "${{ runner.os }}" == "Linux" ]]; then
@@ -104,7 +104,7 @@ jobs:
       shell: bash
       run: |
         set -e
-        BINARY_NAME="./pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi)"
+        BINARY_NAME="./page2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi)"
         echo "Running smoke test: $BINARY_NAME -h"
         # The -h flag causes the program to exit with code 2, which is expected.
         # We check for this specific exit code to confirm it ran correctly.
@@ -114,7 +114,7 @@ jobs:
       shell: bash
       run: |
         set -e
-        BINARY_NAME="pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi)"
+        BINARY_NAME="page2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi)"
         
         if [[ "${{ runner.os }}" == "Windows" ]]; then
           pwsh -Command "\$hash = (Get-FileHash -Algorithm SHA256 '${BINARY_NAME}').Hash.ToLower(); \"\$hash  ${BINARY_NAME}\" | Out-File -FilePath ${BINARY_NAME}.sha256"
@@ -132,7 +132,7 @@ jobs:
       with:
         name: artifact-${{ matrix.goos }}-${{ matrix.goarch }}
         path: |
-          pdf2img-*
+          page2img-*
         retention-days: 1
 
   package:
@@ -151,5 +151,5 @@ jobs:
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: pdf2img-builds
+          name: page2img-builds
           path: artifacts/ 

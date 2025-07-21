@@ -1,4 +1,4 @@
-module github.com/yaklang/pdf2img
+module github.com/yaklang/page2img
 
 go 1.23.0
 
@@ -11,4 +11,4 @@ require (
 	golang.org/x/sys v0.33.0 // indirect
 )
 
-replace pdf2img => ./
+replace github.com/yaklang/page2img => ./
