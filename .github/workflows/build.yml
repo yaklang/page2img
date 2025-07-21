@@ -37,39 +37,34 @@ jobs:
       with:
         go-version: '1.22'
 
-    - name: Install dependencies (Linux)
+    - name: Install C-Compiler (Linux)
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libmupdf-dev pkg-config
+        # Install C compiler for CGO. For ARM64, install the cross-compiler.
         if [ "${{ matrix.goarch }}" = "arm64" ]; then
           sudo apt-get install -y gcc-aarch64-linux-gnu
+        else
+          sudo apt-get install -y gcc
         fi
 
-    - name: Install dependencies (macOS)
-      if: runner.os == 'macOS'
-      run: brew install mupdf pkg-config
-
-    - name: Install dependencies (Windows)
+    - name: Install C-Compiler and Tools (Windows)
       if: runner.os == 'Windows'
-      run: choco install msys2 --params "/NoUpdate" && C:\msys64\usr\bin\bash -lc "pacman -Syu --noconfirm && pacman -S --noconfirm mingw-w64-x86_64-mupdf mingw-w64-x86_64-pkg-config mingw-w64-x86_64-coreutils"
+      # Install the MinGW toolchain for CGO, and coreutils for sha256sum.
+      run: choco install msys2 --params "/NoUpdate" && C:\msys64\usr\bin\bash -lc "pacman -Syu --noconfirm && pacman -S --noconfirm mingw-w64-x86_64-toolchain mingw-w64-x86_64-coreutils"
 
-    - name: Set environment for Windows
-      if: runner.os == 'Windows'
-      run: echo "PKG_CONFIG_PATH=C:/msys64/mingw64/lib/pkgconfig" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-    
     - name: Build
       env:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
         CGO_ENABLED: 1
+        # Set C compiler for ARM64 cross-compilation on Linux.
         CC: ${{ matrix.goos == 'linux' && matrix.goarch == 'arm64' && 'aarch64-linux-gnu-gcc' || '' }}
       shell: bash
       run: |
-        if [[ "${{ runner.os }}" == "macOS" ]]; then
-          export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig"
-        fi
-        go build -v -tags "extlib static pkgconfig" -o pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi) main.go
+        # The 'static' tag will be used as requested.
+        # Without 'extlib', go-fitz should default to its bundled, statically-linked MuPDF library.
+        go build -v -tags "static" -o pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi) main.go
 
     - name: Verify Static Linking
       shell: bash
@@ -84,9 +79,12 @@ jobs:
           LDD_OUTPUT=$(ldd $BINARY_NAME 2>&1 || true)
           echo "$LDD_OUTPUT"
           echo "---"
+          # We check that the output does not contain "mupdf" and is either "statically linked" or "not a dynamic executable".
           if echo "$LDD_OUTPUT" | grep -q 'mupdf'; then
             echo "Error: Binary is dynamically linked to mupdf on Linux"
             exit 1
+          elif ! (echo "$LDD_OUTPUT" | grep -q 'statically linked' || echo "$LDD_OUTPUT" | grep -q 'not a dynamic executable'); then
+            echo "Warning: ldd output is unexpected, but proceeding as mupdf was not found."
           fi
         elif [[ "${{ runner.os }}" == "macOS" ]]; then
           echo "--- otool -L output ---"
@@ -113,6 +111,7 @@ jobs:
         set -e
         BINARY_NAME="pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi)"
         if [[ "${{ runner.os }}" == "Linux" ]] || [[ "${{ runner.os }}" == "Windows" ]]; then
+          # On Windows, this requires coreutils from MSYS2
           sha256sum $BINARY_NAME > $BINARY_NAME.sha256
         elif [[ "${{ runner.os }}" == "macOS" ]]; then
           shasum -a 256 $BINARY_NAME > $BINARY_NAME.sha256
