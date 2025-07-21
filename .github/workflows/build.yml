@@ -42,6 +42,9 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y libmupdf-dev pkg-config
+        if [ "${{ matrix.goarch }}" = "arm64" ]; then
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+        fi
 
     - name: Install dependencies (macOS)
       if: runner.os == 'macOS'
@@ -60,8 +63,12 @@ jobs:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
         CGO_ENABLED: 1
+        CC: ${{ matrix.goos == 'linux' && matrix.goarch == 'arm64' && 'aarch64-linux-gnu-gcc' || '' }}
       shell: bash
       run: |
+        if [[ "${{ runner.os }}" == "macOS" ]]; then
+          export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig"
+        fi
         go build -v -tags "extlib static pkgconfig" -o pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi) main.go
 
     - name: Verify Static Linking
