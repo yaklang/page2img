@@ -41,29 +41,20 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        # Install C compiler for CGO. For ARM64, install the cross-compiler.
         if [ "${{ matrix.goarch }}" = "arm64" ]; then
           sudo apt-get install -y gcc-aarch64-linux-gnu
         else
           sudo apt-get install -y gcc
         fi
 
-    - name: Install C-Compiler and Tools (Windows)
-      if: runner.os == 'Windows'
-      # Install the MinGW toolchain for CGO, and coreutils for sha256sum.
-      run: choco install msys2 --params "/NoUpdate" && C:\msys64\usr\bin\bash -lc "pacman -Syu --noconfirm && pacman -S --noconfirm mingw-w64-x86_64-toolchain mingw-w64-x86_64-coreutils"
-
     - name: Build
       env:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
         CGO_ENABLED: 1
-        # Set C compiler for ARM64 cross-compilation on Linux.
         CC: ${{ matrix.goos == 'linux' && matrix.goarch == 'arm64' && 'aarch64-linux-gnu-gcc' || '' }}
       shell: bash
       run: |
-        # The 'static' tag will be used as requested.
-        # Without 'extlib', go-fitz should default to its bundled, statically-linked MuPDF library.
         go build -v -tags "static" -o pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi) main.go
 
     - name: Verify Static Linking
@@ -73,35 +64,13 @@ jobs:
         BINARY_NAME="pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi)"
         echo "Verifying linking for $BINARY_NAME"
         if [[ "${{ runner.os }}" == "Linux" ]]; then
-          echo "--- ldd output ---"
-          # On a fully static binary, ldd returns a non-zero exit code and prints to stderr.
-          # We pipe stderr to stdout and check the output.
           LDD_OUTPUT=$(ldd $BINARY_NAME 2>&1 || true)
           echo "$LDD_OUTPUT"
-          echo "---"
-          # We check that the output does not contain "mupdf" and is either "statically linked" or "not a dynamic executable".
-          if echo "$LDD_OUTPUT" | grep -q 'mupdf'; then
-            echo "Error: Binary is dynamically linked to mupdf on Linux"
-            exit 1
-          elif ! (echo "$LDD_OUTPUT" | grep -q 'statically linked' || echo "$LDD_OUTPUT" | grep -q 'not a dynamic executable'); then
-            echo "Warning: ldd output is unexpected, but proceeding as mupdf was not found."
-          fi
+          if echo "$LDD_OUTPUT" | grep -q 'mupdf'; then exit 1; fi
         elif [[ "${{ runner.os }}" == "macOS" ]]; then
-          echo "--- otool -L output ---"
-          otool -L $BINARY_NAME
-          echo "---"
-          if otool -L $BINARY_NAME | grep -q 'mupdf'; then
-            echo "Error: Binary is dynamically linked to mupdf on macOS"
-            exit 1
-          fi
+          if otool -L $BINARY_NAME | grep -q 'mupdf'; then exit 1; fi
         elif [[ "${{ runner.os }}" == "Windows" ]]; then
-          echo "--- objdump -p output ---"
-          C:/msys64/mingw64/bin/objdump -p $BINARY_NAME | grep 'DLL Name'
-          echo "---"
-          if C:/msys64/mingw64/bin/objdump -p $BINARY_NAME | grep -q 'mupdf'; then
-            echo "Error: Binary is dynamically linked to mupdf on Windows"
-            exit 1
-          fi
+          if C:/msys64/mingw64/bin/objdump -p $BINARY_NAME | grep -q 'mupdf'; then exit 1; fi
         fi
         echo "OK: Binary is not dynamically linked to mupdf."
 
@@ -111,16 +80,35 @@ jobs:
         set -e
         BINARY_NAME="pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi)"
         if [[ "${{ runner.os }}" == "Linux" ]] || [[ "${{ runner.os }}" == "Windows" ]]; then
-          # On Windows, this requires coreutils from MSYS2
           sha256sum $BINARY_NAME > $BINARY_NAME.sha256
         elif [[ "${{ runner.os }}" == "macOS" ]]; then
           shasum -a 256 $BINARY_NAME > $BINARY_NAME.sha256
         fi
         cat $BINARY_NAME.sha256
 
-    - name: Upload artifact
+    - name: Upload temporary artifact
       uses: actions/upload-artifact@v4
       with:
-        name: pdf2img-builds
+        name: artifact-${{ matrix.goos }}-${{ matrix.goarch }}
         path: |
-          pdf2img-* 
+          pdf2img-*
+        retention-days: 1
+
+  package:
+    name: Package Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List downloaded files
+        run: ls -R artifacts
+
+      - name: Upload final package
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf2img-builds
+          path: artifacts/ 
