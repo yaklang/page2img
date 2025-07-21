@@ -69,7 +69,7 @@ jobs:
         if [[ "${{ runner.os }}" == "macOS" ]]; then
           export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig"
         fi
-        go build -v -tags "extlib static pkgconfig" -o pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi) main.go
+        go build -v -tags "static" -o pdf2img-${{ matrix.goos }}-${{ matrix.goarch }}$(if [ "${{ matrix.goos }}" = "windows" ]; then echo ".exe"; fi) main.go
 
     - name: Verify Static Linking
       shell: bash
