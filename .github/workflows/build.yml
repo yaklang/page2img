@@ -150,7 +150,7 @@ jobs:
 
       - name: Download Yak for uploading
         run: |
-          wget -q -O './yak' https://oss-accelerate.aliyuncs.com/yak/ci/yak_linux_amd64
+          wget -q -O './yak' https://yaklang.oss-accelerate.aliyuncs.com/yak/ci/yak_linux_amd64
           chmod +x ./yak
 
       - name: Upload to OSS
