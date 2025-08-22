@@ -105,6 +105,52 @@ func main() {
 
 	log.Info(fmt.Sprintf("Document has %d pages.", doc.NumPage()))
 
+	processImage := func(img *image.RGBA, pageNum int) {
+		outputFile := fmt.Sprintf(strings.Replace(outputPrefix, "%d", "%d", -1), pageNum) + outputExt
+
+		tempFile := outputFile + ".tmp"
+		f, err := os.Create(tempFile)
+		if err != nil {
+			log.Error(fmt.Sprintf("Failed to create output file %s: %v", tempFile, err))
+			return
+		}
+		defer f.Close()
+
+		if outputExt == ".jpeg" || outputExt == ".jpg" {
+			// 使用新函数来编码JPEG
+			jpegBytes, finalQuality, err := encodeJPEGWithTargetSize(img, targetSizeBytes)
+			if err != nil {
+				log.Error(fmt.Sprintf("Failed to encode JPEG for page %d: %v", pageNum, err))
+				return
+			}
+
+			_, err = f.Write(jpegBytes)
+			if err != nil {
+				log.Error(fmt.Sprintf("Failed to write image data to %s: %v", tempFile, err))
+				return
+			}
+
+			log.Info(fmt.Sprintf("Saved page %d (Final Quality: %d, Size: %.2f KB)",
+				pageNum, finalQuality, float64(len(jpegBytes))/1024.0))
+
+		} else if outputExt == ".png" {
+			err = png.Encode(f, img)
+			if err != nil {
+				log.Error(fmt.Sprintf("Failed to save PNG image %s: %v", tempFile, err))
+				return
+			}
+		}
+		err = os.Rename(tempFile, outputFile)
+		if err != nil {
+			log.Error(fmt.Sprintf("Failed to rename %s to %s: %v", tempFile, outputFile, err))
+			return
+		}
+		info, _ := os.Stat(outputFile)
+		log.Info(fmt.Sprintf("Saved page %d to %s (Size: %.2f KB)",
+			pageNum, outputFile, float64(info.Size())/1024.0))
+
+	}
+
 	for n := 0; n < doc.NumPage(); n++ {
 		pageNum := n + 1
 		log.Info(fmt.Sprintf("Processing page %d", pageNum))
@@ -115,43 +161,7 @@ func main() {
 			log.Error(fmt.Sprintf("Failed to get image for page %d: %v", pageNum, err))
 			continue
 		}
-
-		outputFile := fmt.Sprintf(strings.Replace(outputPrefix, "%d", "%d", -1), pageNum) + outputExt
-		f, err := os.Create(outputFile)
-		if err != nil {
-			log.Error(fmt.Sprintf("Failed to create output file %s: %v", outputFile, err))
-			continue
-		}
-		defer f.Close()
-
-		if outputExt == ".jpeg" || outputExt == ".jpg" {
-			// 使用新函数来编码JPEG
-			jpegBytes, finalQuality, err := encodeJPEGWithTargetSize(img, targetSizeBytes)
-			if err != nil {
-				log.Error(fmt.Sprintf("Failed to encode JPEG for page %d: %v", pageNum, err))
-				continue
-			}
-
-			_, err = f.Write(jpegBytes)
-			if err != nil {
-				log.Error(fmt.Sprintf("Failed to write image data to %s: %v", outputFile, err))
-				continue
-			}
-
-			log.Info(fmt.Sprintf("Saved page %d to %s (Final Quality: %d, Size: %.2f KB)",
-				pageNum, outputFile, finalQuality, float64(len(jpegBytes))/1024.0))
-
-		} else if outputExt == ".png" {
-			err = png.Encode(f, img)
-			if err != nil {
-				log.Error(fmt.Sprintf("Failed to save PNG image %s: %v", outputFile, err))
-				continue
-			}
-			// 获取PNG文件大小以提供一致的日志输出
-			info, _ := f.Stat()
-			log.Info(fmt.Sprintf("Saved page %d to %s (Size: %.2f KB)",
-				pageNum, outputFile, float64(info.Size())/1024.0))
-		}
+		processImage(img, pageNum)
 	}
 
 	log.Info("All pages processed.")
